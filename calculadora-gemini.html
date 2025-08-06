@@ -8,47 +8,6 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Google Fonts - Inter -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
-    <!-- Firebase SDKs -->
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-        import { getFirestore, doc, setDoc, collection, addDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-
-        // Define global variables for Firebase configuration provided by the environment
-        window.__app_id = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        window.__firebase_config = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
-        window.__initial_auth_token = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-
-        // Make Firebase functions globally accessible (or attach to window for easier access in vanilla JS)
-        window.firebaseApp = initializeApp(window.__firebase_config);
-        window.db = getFirestore(window.firebaseApp);
-        window.auth = getAuth(window.firebaseApp);
-
-        // Authentication logic
-        window.userId = null;
-        window.isAuthReady = false;
-
-        onAuthStateChanged(window.auth, async (user) => {
-            if (user) {
-                window.userId = user.uid;
-            } else {
-                try {
-                    if (window.__initial_auth_token) {
-                        await signInWithCustomToken(window.auth, window.__initial_auth_token);
-                        window.userId = window.auth.currentUser.uid;
-                    } else {
-                        await signInAnonymously(window.auth);
-                        window.userId = window.auth.currentUser.uid;
-                    }
-                } catch (error) {
-                    console.error("Error during Firebase authentication:", error);
-                    window.userId = crypto.randomUUID(); // Fallback to a random ID
-                }
-            }
-            window.isAuthReady = true;
-            document.dispatchEvent(new Event('firebaseAuthReady')); // Notify when auth is ready
-        });
-    </script>
     <!-- jsPDF CDN -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <style>
@@ -75,7 +34,64 @@
         </div>
     </div>
 
-    <script>
+    <script type="module">
+        // IMPORTANTE: Este archivo debe ser servido a través de un servidor web local (ej. Python's http.server, Node.js's serve)
+        // para que las importaciones de módulos y las peticiones a Firebase funcionen correctamente debido a las políticas de seguridad del navegador.
+        // Por ejemplo, con Python: abre tu terminal en la carpeta del archivo y ejecuta 'python -m http.server'.
+        // Luego, abre tu navegador y ve a 'http://localhost:8000/nombre_de_tu_archivo.html'.
+
+        // Importaciones de Firebase
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+        import { getFirestore, doc, setDoc, collection, addDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+        // Define global variables for Firebase configuration provided by the environment
+        // Si estás ejecutando esto localmente y quieres conectarlo a tu propio proyecto Firebase,
+        // deberás reemplazar 'default-app-id' y el JSON vacío por tus credenciales reales de Firebase.
+        // Puedes encontrar tu configuración de Firebase en la consola de Firebase -> Configuración del proyecto -> Tus apps.
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        // Inicializar Firebase
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+
+        // Variables de estado
+        let userId = null;
+        let isAuthReady = false;
+        let currentQuestionIndex = 0;
+        let answers = {};
+        let result = null;
+        let isGeneratingPdf = false;
+
+        // Elementos del DOM
+        const quizContainer = document.getElementById('quiz-container');
+        const userIdDisplay = document.getElementById('user-id-display');
+
+        // Lógica de Autenticación de Firebase
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                userId = user.uid;
+            } else {
+                try {
+                    if (initialAuthToken) {
+                        await signInWithCustomToken(auth, initialAuthToken);
+                        userId = auth.currentUser.uid;
+                    } else {
+                        await signInAnonymously(auth);
+                        userId = auth.currentUser.uid;
+                    }
+                } catch (error) {
+                    console.error("Error during Firebase authentication:", error);
+                    userId = crypto.randomUUID(); // Fallback to a random ID
+                }
+            }
+            isAuthReady = true;
+            renderQuestion(); // Renderiza la primera pregunta una vez que la autenticación está lista
+        });
+
         // Define the quiz questions and their mapping to escalones
         const questions = [
             {
@@ -114,14 +130,6 @@
                 action: 'Revisa tus escalones anteriores. Cuando los construyes correctamente, la venta es inevitable. El cliente ya confía, ya ve el valor y tiene la urgencia. ¡La venta debe sentirse como una decisión natural!',
             },
         ];
-
-        let currentQuestionIndex = 0;
-        let answers = {};
-        let result = null;
-        let isGeneratingPdf = false;
-
-        const quizContainer = document.getElementById('quiz-container');
-        const userIdDisplay = document.getElementById('user-id-display');
 
         // Function to render the current question
         function renderQuestion() {
@@ -242,16 +250,16 @@
 
         // Function to save results to Firestore
         async function saveResultsToFirestore() {
-            if (window.db && window.userId && window.isAuthReady) {
+            if (db && userId && isAuthReady) {
                 try {
-                    const resultsCollectionRef = window.firebase.firestore.collection(window.db, `artifacts/${window.__app_id}/users/${window.userId}/quiz_results`);
-                    await window.firebase.firestore.addDoc(resultsCollectionRef, {
+                    const resultsCollectionRef = collection(db, `artifacts/${appId}/users/${userId}/quiz_results`);
+                    await addDoc(resultsCollectionRef, {
                         timestamp: new Date(),
                         answers: answers,
                         identifiedEscalon: result.escalon,
                         recommendation: result.recommendation,
                         action: result.action,
-                        userId: window.userId,
+                        userId: userId,
                     });
                     console.log("Quiz results saved to Firestore!");
                 } catch (e) {
@@ -272,17 +280,17 @@
             if (email) {
                 emailSentMessageElement.textContent = '¡Resultado enviado! Revisa tu bandeja de entrada (simulado).';
 
-                if (window.db && window.userId && window.isAuthReady) {
+                if (db && userId && isAuthReady) {
                     try {
-                        const userDocRef = window.firebase.firestore.doc(window.db, `artifacts/${window.__app_id}/users/${window.userId}/quiz_results`, 'latest');
-                        await window.firebase.firestore.setDoc(userDocRef, {
+                        const userDocRef = doc(db, `artifacts/${appId}/users/${userId}/quiz_results`, 'latest');
+                        await setDoc(userDocRef, {
                             timestamp: new Date(),
                             answers: answers,
                             identifiedEscalon: result.escalon,
                             recommendation: result.recommendation,
                             action: result.action,
                             email: email,
-                            userId: window.userId,
+                            userId: userId,
                         }, { merge: true });
                         console.log("Email added to Firestore results!");
                     } catch (e) {
@@ -329,7 +337,7 @@
             // User ID
             doc.setFontSize(10);
             doc.setTextColor(107, 114, 128); // Darker Gray
-            doc.text(`Tu ID de Usuario: ${window.userId}`, margin, y);
+            doc.text(`Tu ID de Usuario: ${userId}`, margin, y);
             y += lineHeight * 2;
 
             // Identified Escalón Section
@@ -372,17 +380,12 @@
 
         // Function to update user ID display
         function updateUserIdDisplay() {
-            if (window.userId) {
-                userIdDisplay.innerHTML = `Tu ID de usuario para esta sesión: <span class="font-mono text-xs break-all">${window.userId}</span>`;
+            if (userId) {
+                userIdDisplay.innerHTML = `Tu ID de usuario para esta sesión: <span class="font-mono text-xs break-all">${userId}</span>`;
             } else {
                 userIdDisplay.textContent = 'Cargando ID de usuario...';
             }
         }
-
-        // Initial render when Firebase Auth is ready
-        document.addEventListener('firebaseAuthReady', () => {
-            renderQuestion();
-        });
 
         // Show loading message initially
         quizContainer.innerHTML = `
@@ -394,3 +397,4 @@
     </script>
 </body>
 </html>
+
