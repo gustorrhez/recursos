@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Diagnóstico: ¿En qué escalón estás?</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts - Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <!-- Firebase SDKs -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+        import { getFirestore, doc, setDoc, collection, addDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+        // Define global variables for Firebase configuration provided by the environment
+        window.__app_id = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        window.__firebase_config = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+        window.__initial_auth_token = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        // Make Firebase functions globally accessible (or attach to window for easier access in vanilla JS)
+        window.firebaseApp = initializeApp(window.__firebase_config);
+        window.db = getFirestore(window.firebaseApp);
+        window.auth = getAuth(window.firebaseApp);
+
+        // Authentication logic
+        window.userId = null;
+        window.isAuthReady = false;
+
+        onAuthStateChanged(window.auth, async (user) => {
+            if (user) {
+                window.userId = user.uid;
+            } else {
+                try {
+                    if (window.__initial_auth_token) {
+                        await signInWithCustomToken(window.auth, window.__initial_auth_token);
+                        window.userId = window.auth.currentUser.uid;
+                    } else {
+                        await signInAnonymously(window.auth);
+                        window.userId = window.auth.currentUser.uid;
+                    }
+                } catch (error) {
+                    console.error("Error during Firebase authentication:", error);
+                    window.userId = crypto.randomUUID(); // Fallback to a random ID
+                }
+            }
+            window.isAuthReady = true;
+            document.dispatchEvent(new Event('firebaseAuthReady')); // Notify when auth is ready
+        });
+    </script>
+    <!-- jsPDF CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+    </style>
+</head>
+<body class="min-h-screen bg-gradient-to-br from-purple-100 to-indigo-200 flex items-center justify-center p-4">
+    <div id="app-container" class="bg-white rounded-xl shadow-2xl p-8 max-w-2xl w-full transform transition-all duration-500 hover:scale-[1.01] border-4 border-purple-300">
+        <h1 class="text-4xl font-extrabold text-center text-purple-800 mb-6 font-inter">
+            Diagnóstico: ¿En qué escalón estás?
+        </h1>
+        <p class="text-center text-gray-600 mb-8 text-lg font-inter">
+            Descubre dónde te encuentras en el "Puente de 5 Escalones" y cómo convertir tu conocimiento en ingresos predecibles.
+        </p>
+
+        <div id="quiz-container" class="space-y-6">
+            <!-- Quiz content will be loaded here by JavaScript -->
+        </div>
+
+        <div id="user-id-display" class="text-sm text-center text-gray-500 mt-4 font-inter">
+            <!-- User ID will be displayed here -->
+        </div>
+    </div>
+
+    <script>
+        // Define the quiz questions and their mapping to escalones
+        const questions = [
+            {
+                id: 'q1',
+                text: 'A pesar de tener un gran producto/servicio, ¿sientes que pocos saben de su existencia o cómo puede ayudarles?',
+                escalon: 1,
+                recommendation: 'Estás en el Escalón 1: "Tengo algo valioso". Tu principal desafío es la visibilidad. Necesitas estrategias para que la gente descubra lo increíble que eres y lo que ofreces.',
+                action: 'Enfócate en crear una presencia online sólida y en compartir tu propuesta de valor de forma clara. ¡Es hora de salir de la calle sin tránsito!',
+            },
+            {
+                id: 'q2',
+                text: 'Creas contenido (posts, videos), pero ¿no genera suficiente interés genuino o la gente no se detiene a leer/ver?',
+                escalon: 2,
+                recommendation: 'Estás en el Escalón 2: "Despierto interés genuino". Ya estás creando, pero el contenido no está conectando. No se trata de hablar de ti, sino de educar y mostrar algo nuevo.',
+                action: 'Analiza a tu audiencia y sus problemas. Crea contenido que eduque, que haga pensar "Wow, nunca lo había visto así". ¡Conviértete en un maestro, no en un vendedor!',
+            },
+            {
+                id: 'q3',
+                text: 'La gente muestra interés inicial, pero ¿se olvida de ti rápidamente o no hay un seguimiento efectivo para mantener la conexión?',
+                escalon: 3,
+                recommendation: 'Estás en el Escalón 3: "Soy recordado". ¡Aquí se pierden millones! La audiencia consume mucho contenido; si no tienes un sistema para mantenerte en su radar, desapareces.',
+                action: 'Implementa un sistema de seguimiento estratégico: emails que no parezcan spam, mensajes de WhatsApp que generen conversación. ¡Mantente presente en la mente de tus prospectos!',
+            },
+            {
+                id: 'q4',
+                text: 'Tus prospectos están interesados, pero ¿les cuesta pasar de "esto es interesante" a "¡lo necesito urgentemente!"?',
+                escalon: 4,
+                recommendation: 'Estás en el Escalón 4: "Lo necesito" (El momento mágico). Tus prospectos están cerca, pero no ven la urgencia o la necesidad específica de tu solución.',
+                action: 'Enfócate en construir valor y confianza con los escalones anteriores. Demuestra cómo tu solución resuelve un problema específico y urgente que ellos tienen. ¡Haz que reconozcan que tú eres LA solución!',
+            },
+            {
+                id: 'q5',
+                text: 'Cuando llegas a la fase de venta, ¿sientes que hay muchas objeciones, regateos o la decisión de compra no es natural?',
+                escalon: 5,
+                recommendation: 'Estás en el Escalón 5: "Lo compro" (Decisión natural). Si la venta se siente forzada, es porque la confianza y el valor no se construyeron lo suficiente en los escalones previos.',
+                action: 'Revisa tus escalones anteriores. Cuando los construyes correctamente, la venta es inevitable. El cliente ya confía, ya ve el valor y tiene la urgencia. ¡La venta debe sentirse como una decisión natural!',
+            },
+        ];
+
+        let currentQuestionIndex = 0;
+        let answers = {};
+        let result = null;
+        let isGeneratingPdf = false;
+
+        const quizContainer = document.getElementById('quiz-container');
+        const userIdDisplay = document.getElementById('user-id-display');
+
+        // Function to render the current question
+        function renderQuestion() {
+            const question = questions[currentQuestionIndex];
+            quizContainer.innerHTML = `
+                <div class="bg-purple-50 p-6 rounded-lg shadow-inner border border-purple-200">
+                    <p class="text-xl font-semibold text-purple-700 mb-4 font-inter">
+                        Pregunta ${currentQuestionIndex + 1} de ${questions.length}:
+                    </p>
+                    <p class="text-2xl text-gray-800 font-bold mb-6 font-inter">
+                        ${question.text}
+                    </p>
+                    <div class="flex flex-col space-y-4">
+                        <button id="btn-yes"
+                            class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-6 rounded-full shadow-lg transform transition duration-300 hover:scale-105 focus:outline-none focus:ring-4 focus:ring-purple-300 font-inter"
+                        >
+                            Sí
+                        </button>
+                        <button id="btn-no"
+                            class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-3 px-6 rounded-full shadow-lg transform transition duration-300 hover:scale-105 focus:outline-none focus:ring-4 focus:ring-gray-300 font-inter"
+                        >
+                            No
+                        </button>
+                    </div>
+                </div>
+            `;
+
+            document.getElementById('btn-yes').onclick = () => handleAnswer(question.id, 'yes');
+            document.getElementById('btn-no').onclick = () => handleAnswer(question.id, 'no');
+            updateUserIdDisplay();
+        }
+
+        // Function to handle answer selection
+        function handleAnswer(questionId, answer) {
+            answers[questionId] = answer;
+            if (currentQuestionIndex < questions.length - 1) {
+                currentQuestionIndex++;
+                renderQuestion();
+            } else {
+                calculateResult();
+            }
+        }
+
+        // Function to calculate and display the result
+        async function calculateResult() {
+            let identifiedEscalon = null;
+            for (const q of questions) {
+                if (answers[q.id] === 'yes') {
+                    identifiedEscalon = q.escalon;
+                    break;
+                }
+            }
+
+            if (identifiedEscalon) {
+                result = questions.find(q => q.escalon === identifiedEscalon);
+            } else {
+                result = {
+                    escalon: '¡Felicidades!',
+                    recommendation: 'Parece que estás en el camino correcto o ya has superado los desafíos comunes de los emprendedores. ¡Sigue así!',
+                    action: 'Considera profundizar en estrategias avanzadas para escalar tu negocio y maximizar tu impacto.',
+                };
+            }
+            renderResult();
+            await saveResultsToFirestore();
+        }
+
+        // Function to render the result screen
+        function renderResult() {
+            quizContainer.innerHTML = `
+                <div class="text-center space-y-6">
+                    <h2 class="text-3xl font-extrabold text-purple-700 mb-4 font-inter">
+                        ¡Diagnóstico Completo!
+                    </h2>
+                    <div class="bg-green-50 p-6 rounded-lg shadow-inner border border-green-200">
+                        <p class="text-xl font-bold text-green-700 mb-2 font-inter">
+                            ${result.escalon}
+                        </p>
+                        <p class="text-lg text-gray-700 mb-4 font-inter">
+                            ${result.recommendation}
+                        </p>
+                        <p class="text-lg text-gray-800 font-semibold font-inter">
+                            Acción Inmediata: <span class="text-purple-600">${result.action}</span>
+                        </p>
+                    </div>
+
+                    <div id="email-form-container" class="mt-8 bg-blue-50 p-6 rounded-lg shadow-inner border border-blue-200">
+                        <p class="text-xl font-semibold text-blue-700 mb-4 font-inter">
+                            Recibe tu resultado y una guía exclusiva en tu email:
+                        </p>
+                        <form id="email-form" class="flex flex-col sm:flex-row gap-4 justify-center">
+                            <input
+                                type="email"
+                                placeholder="Tu correo electrónico"
+                                id="email-input"
+                                class="flex-grow p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-transparent font-inter"
+                                required
+                            />
+                            <button type="submit" id="send-email-btn"
+                                class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-full shadow-lg transform transition duration-300 hover:scale-105 focus:outline-none focus:ring-4 focus:ring-blue-300 font-inter"
+                            >
+                                Enviar Resultado
+                            </button>
+                        </form>
+                        <p id="email-sent-message" class="mt-4 text-green-600 font-semibold font-inter"></p>
+                    </div>
+
+                    <button id="download-pdf-btn"
+                        class="mt-6 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-full shadow-lg transform transition duration-300 hover:scale-105 focus:outline-none focus:ring-4 focus:ring-indigo-300 font-inter"
+                    >
+                        Descargar Resultado (PDF)
+                    </button>
+                </div>
+            `;
+            document.getElementById('email-form').onsubmit = handleEmailSubmit;
+            document.getElementById('download-pdf-btn').onclick = handleDownloadResult;
+            updateUserIdDisplay();
+        }
+
+        // Function to save results to Firestore
+        async function saveResultsToFirestore() {
+            if (window.db && window.userId && window.isAuthReady) {
+                try {
+                    const resultsCollectionRef = window.firebase.firestore.collection(window.db, `artifacts/${window.__app_id}/users/${window.userId}/quiz_results`);
+                    await window.firebase.firestore.addDoc(resultsCollectionRef, {
+                        timestamp: new Date(),
+                        answers: answers,
+                        identifiedEscalon: result.escalon,
+                        recommendation: result.recommendation,
+                        action: result.action,
+                        userId: window.userId,
+                    });
+                    console.log("Quiz results saved to Firestore!");
+                } catch (e) {
+                    console.error("Error adding document to Firestore: ", e);
+                }
+            } else {
+                console.warn("Firestore not ready or user not authenticated, skipping save.");
+            }
+        }
+
+        // Function to handle email submission
+        async function handleEmailSubmit(e) {
+            e.preventDefault();
+            const emailInput = document.getElementById('email-input');
+            const email = emailInput.value;
+            const emailSentMessageElement = document.getElementById('email-sent-message');
+
+            if (email) {
+                emailSentMessageElement.textContent = '¡Resultado enviado! Revisa tu bandeja de entrada (simulado).';
+
+                if (window.db && window.userId && window.isAuthReady) {
+                    try {
+                        const userDocRef = window.firebase.firestore.doc(window.db, `artifacts/${window.__app_id}/users/${window.userId}/quiz_results`, 'latest');
+                        await window.firebase.firestore.setDoc(userDocRef, {
+                            timestamp: new Date(),
+                            answers: answers,
+                            identifiedEscalon: result.escalon,
+                            recommendation: result.recommendation,
+                            action: result.action,
+                            email: email,
+                            userId: window.userId,
+                        }, { merge: true });
+                        console.log("Email added to Firestore results!");
+                    } catch (e) {
+                        console.error("Error updating document with email in Firestore: ", e);
+                    }
+                }
+            } else {
+                emailSentMessageElement.textContent = 'Por favor, ingresa un correo válido.';
+            }
+        }
+
+        // Function to handle PDF download
+        async function handleDownloadResult() {
+            if (!result) return;
+
+            isGeneratingPdf = true;
+            const downloadBtn = document.getElementById('download-pdf-btn');
+            downloadBtn.textContent = 'Generando PDF...';
+            downloadBtn.disabled = true;
+
+            // Utiliza window.jsPDF para acceder a la librería globalmente cargada
+            const doc = new window.jsPDF();
+
+            // Constants for layout
+            const margin = 20;
+            let y = margin;
+            const lineHeight = 10;
+            const maxWidth = 210 - 2 * margin; // A4 width - 2*margin
+
+            // Header
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(24);
+            doc.setTextColor(76, 29, 149); // Purple
+            doc.text('Diagnóstico de Emprendedor', 105, y, { align: 'center' });
+            y += 15;
+
+            // Subheader
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(12);
+            doc.setTextColor(55, 65, 81); // Gray
+            doc.text('El Puente de 5 Escalones para Convertir Conocimiento en Ingresos', 105, y, { align: 'center' });
+            y += 20;
+
+            // User ID
+            doc.setFontSize(10);
+            doc.setTextColor(107, 114, 128); // Darker Gray
+            doc.text(`Tu ID de Usuario: ${window.userId}`, margin, y);
+            y += lineHeight * 2;
+
+            // Identified Escalón Section
+            doc.setFillColor(236, 252, 236); // Light Green background
+            doc.rect(margin - 5, y - 5, maxWidth + 10, lineHeight * 5 + 10, 'F'); // Background rectangle
+            doc.setDrawColor(134, 239, 172); // Green border
+            doc.setLineWidth(0.5);
+            doc.rect(margin - 5, y - 5, maxWidth + 10, lineHeight * 5 + 10, 'S'); // Border
+
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(18);
+            doc.setTextColor(22, 101, 52); // Dark Green
+            doc.text(`Escalón Identificado: ${result.escalon}`, margin, y);
+            y += lineHeight * 1.5;
+
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(12);
+            doc.setTextColor(55, 65, 81); // Gray
+            const recommendationLines = doc.splitTextToSize(result.recommendation, maxWidth);
+            doc.text(recommendationLines, margin, y);
+            y += lineHeight * recommendationLines.length + lineHeight;
+
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(76, 29, 149); // Purple
+            const actionLines = doc.splitTextToSize(`Acción Inmediata: ${result.action}`, maxWidth);
+            doc.text(actionLines, margin, y);
+            y += lineHeight * actionLines.length + lineHeight * 2;
+
+            // Footer
+            doc.setFont('helvetica', 'italic');
+            doc.setFontSize(10);
+            doc.setTextColor(156, 163, 175); // Light Gray
+            doc.text('¡Esperamos que esta guía te sea de gran utilidad para cruzar tu propio río!', 105, 280, { align: 'center' }); // Near bottom of A4 page
+
+            doc.save('Diagnostico_Emprendedor_Resultado.pdf');
+            isGeneratingPdf = false;
+            downloadBtn.textContent = 'Descargar Resultado (PDF)';
+            downloadBtn.disabled = false;
+        }
+
+        // Function to update user ID display
+        function updateUserIdDisplay() {
+            if (window.userId) {
+                userIdDisplay.innerHTML = `Tu ID de usuario para esta sesión: <span class="font-mono text-xs break-all">${window.userId}</span>`;
+            } else {
+                userIdDisplay.textContent = 'Cargando ID de usuario...';
+            }
+        }
+
+        // Initial render when Firebase Auth is ready
+        document.addEventListener('firebaseAuthReady', () => {
+            renderQuestion();
+        });
+
+        // Show loading message initially
+        quizContainer.innerHTML = `
+            <div class="flex items-center justify-center py-10">
+                <p class="text-lg text-gray-700">Cargando la calculadora...</p>
+            </div>
+        `;
+        updateUserIdDisplay(); // Initial display of user ID status
+    </script>
+</body>
+</html>
