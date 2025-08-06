@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>¿En Qué Escalón del Puente Estás Atorado?</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.22.5/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState } = React;
+
+        // Iconos como componentes SVG simples
+        const Target = () => (
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="10"/>
+                <circle cx="12" cy="12" r="6"/>
+                <circle cx="12" cy="12" r="2"/>
+            </svg>
+        );
+
+        const ArrowRight = () => (
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <line x1="5" y1="12" x2="19" y2="12"/>
+                <polyline points="12,5 19,12 12,19"/>
+            </svg>
+        );
+
+        const AlertCircle = () => (
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="12" y1="8" x2="12" y2="12"/>
+                <line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+        );
+
+        const DollarSign = () => (
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <line x1="12" y1="1" x2="12" y2="23"/>
+                <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+            </svg>
+        );
+
+        const Zap = () => (
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <polygon points="13,2 3,14 12,14 11,22 21,10 12,10 13,2"/>
+            </svg>
+        );
+
+        const Users = () => (
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+                <circle cx="9" cy="7" r="4"/>
+                <path d="M22 21v-2a4 4 0 0 0-3-3.87"/>
+                <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+            </svg>
+        );
+
+        const CalculadoraPuente = () => {
+            const [currentQuestion, setCurrentQuestion] = useState(0);
+            const [answers, setAnswers] = useState({});
+            const [showResult, setShowResult] = useState(false);
+            const [email, setEmail] = useState('');
+            const [name, setName] = useState('');
+
+            const questions = [
+                {
+                    id: 'expertise',
+                    title: '¿Qué tan seguro te sientes de tu conocimiento/expertise?',
+                    options: [
+                        { value: 1, text: 'Aún aprendiendo, no me siento experto', escalon: 0 },
+                        { value: 2, text: 'Tengo conocimiento pero no sé si es suficiente', escalon: 1 },
+                        { value: 3, text: 'Domino mi área y he ayudado a otros', escalon: 1 },
+                        { value: 4, text: 'Soy reconocido experto en mi nicho', escalon: 1 }
+                    ]
+                },
+                {
+                    id: 'contenido',
+                    title: '¿Qué pasa cuando publicas contenido educativo?',
+                    options: [
+                        { value: 1, text: 'Casi nadie lo ve o interactúa', escalon: 1 },
+                        { value: 2, text: 'Algunos likes pero poca interacción real', escalon: 2 },
+                        { value: 3, text: 'Buena interacción, comentarios y shares', escalon: 2 },
+                        { value: 4, text: 'Contenido viral, mucha engagement genuino', escalon: 2 }
+                    ]
+                },
+                {
+                    id: 'seguimiento',
+                    title: '¿Cómo manejas el seguimiento con tu audiencia?',
+                    options: [
+                        { value: 1, text: 'No tengo sistema, espero que me contacten', escalon: 2 },
+                        { value: 2, text: 'Tengo lista de email pero casi no la uso', escalon: 3 },
+                        { value: 3, text: 'Envío emails ocasionalmente', escalon: 3 },
+                        { value: 4, text: 'Sistema automatizado de nurturing', escalon: 3 }
+                    ]
+                },
+                {
+                    id: 'conexion',
+                    title: '¿Tu audiencia te recuerda cuando tiene el problema que resuelves?',
+                    options: [
+                        { value: 1, text: 'No creo, desaparezco en el ruido', escalon: 3 },
+                        { value: 2, text: 'A veces, pero no consistentemente', escalon: 3 },
+                        { value: 3, text: 'Sí, me mencionan o me escriben', escalon: 3 },
+                        { value: 4, text: 'Soy su primera opción siempre', escalon: 4 }
+                    ]
+                },
+                {
+                    id: 'urgencia',
+                    title: '¿Qué sucede cuando alguien muestra interés en trabajar contigo?',
+                    options: [
+                        { value: 1, text: 'Raramente alguien muestra interés real', escalon: 3 },
+                        { value: 2, text: 'Muestran interés pero "lo pensarán"', escalon: 4 },
+                        { value: 3, text: 'Tienen interés pero no urgencia', escalon: 4 },
+                        { value: 4, text: 'Vienen con urgencia y presupuesto', escalon: 4 }
+                    ]
+                },
+                {
+                    id: 'ventas',
+                    title: '¿Cómo se sienten tus procesos de venta?',
+                    options: [
+                        { value: 1, text: 'No tengo ventas consistentes', escalon: 4 },
+                        { value: 2, text: 'Ventas ocasionales con mucho esfuerzo', escalon: 4 },
+                        { value: 3, text: 'Ventas regulares pero con objeciones', escalon: 5 },
+                        { value: 4, text: 'Ventas naturales, clientes convencidos', escalon: 5 }
+                    ]
+                },
+                {
+                    id: 'ingresos',
+                    title: '¿Cuál es tu situación de ingresos digitales actual?',
+                    options: [
+                        { value: 1, text: 'Menos de $500 USD/mes', escalon: 'multiple' },
+                        { value: 2, text: '$500-2000 USD/mes', escalon: 'multiple' },
+                        { value: 3, text: '$2000-5000 USD/mes', escalon: 'multiple' },
+                        { value: 4, text: 'Más de $5000 USD/mes', escalon: 5 }
+                    ]
+                }
+            ];
+
+            const handleAnswer = (questionId, option) => {
+                const newAnswers = { ...answers, [questionId]: option };
+                setAnswers(newAnswers);
+
+                if (currentQuestion < questions.length - 1) {
+                    setCurrentQuestion(currentQuestion + 1);
+                } else {
+                    calculateResult(newAnswers);
+                }
+            };
+
+            const calculateResult = (finalAnswers) => {
+                const escalones = [0, 0, 0, 0, 0, 0];
+                let totalScore = 0;
+
+                Object.values(finalAnswers).forEach(answer => {
+                    if (answer.escalon === 'multiple') {
+                        return;
+                    }
+                    escalones[answer.escalon]++;
+                    totalScore += answer.value;
+                });
+
+                let maxEscalon = 0;
+                let maxCount = escalones[0];
+                
+                for (let i = 1; i < escalones.length; i++) {
+                    if (escalones[i] > maxCount) {
+                        maxCount = escalones[i];
+                        maxEscalon = i;
+                    }
+                }
+
+                if (totalScore <= 10) maxEscalon = Math.max(0, maxEscalon - 1);
+                if (totalScore >= 25) maxEscalon = Math.min(5, maxEscalon + 1);
+
+                setShowResult({ escalon: maxEscalon, score: totalScore, ingresos: finalAnswers.ingresos?.value || 1 });
+            };
+
+            const getResult = () => {
+                const { escalon } = showResult;
+
+                const resultados = {
+                    0: {
+                        title: "🏗️ PRE-PUENTE: Construyendo los Cimientos",
+                        description: "Estás en la fase de preparación. Necesitas solidificar tu expertise antes de cruzar el puente.",
+                        problem: "Tu conocimiento aún no está listo para monetizarse efectivamente",
+                        potencial: 500,
+                        plan: [
+                            "📚 Define tu nicho específico y estudia a tu competencia",
+                            "🎯 Identifica 3 problemas concretos que puedes resolver",
+                            "📝 Crea tu primer caso de estudio (aunque sea ayudando gratis)",
+                            "🎓 Documenta tu proceso y metodología",
+                            "🔍 Investiga profundamente a tu audiencia ideal"
+                        ]
+                    },
+                    1: {
+                        title: "📍 ESCALÓN 1: Tengo Algo Valioso",
+                        description: "Tienes el conocimiento y la experiencia, pero nadie lo descubre. Es como tener un restaurante increíble en una calle vacía.",
+                        problem: "Tu expertise es invisible para tu mercado",
+                        potencial: 2000,
+                        plan: [
+                            "🎯 Define tu propuesta de valor en una frase clara",
+                            "📊 Crea tu perfil de cliente ideal con datos específicos",
+                            "🗺️ Mapea dónde está tu audiencia (plataformas, horarios, intereses)",
+                            "📱 Establece presencia consistente en 2-3 canales clave",
+                            "📈 Comienza a crear contenido educativo regularmente"
+                        ]
+                    },
+                    2: {
+                        title: "🎯 ESCALÓN 2: Despierto Interés Genuino",
+                        description: "Generas algo de interacción, pero no el tipo que convierte. Necesitas contenido que realmente eduque y posicione tu expertise.",
+                        problem: "Tu contenido no genera el interés correcto",
+                        potencial: 3500,
+                        plan: [
+                            "🧠 Desarrolla el framework educativo 70/20/10 (70% educar, 20% inspirar, 10% vender)",
+                            "📊 Analiza qué contenido genera más engagement real",
+                            "🎬 Crea contenido que muestre 'el cómo' sin dar todo",
+                            "💬 Implementa CTAs que generen conversación, no ventas",
+                            "📈 Mide engagement rate, saves y shares, no solo likes"
+                        ]
+                    },
+                    3: {
+                        title: "⚠️ ESCALÓN 3: Soy Recordado (Zona Crítica)",
+                        description: "¡ALERTA! Aquí se pierden el 70% de las ventas potenciales. Generas interés pero la gente se olvida de ti en el ruido digital.",
+                        problem: "No tienes sistema para mantenerte en el radar",
+                        potencial: 6000,
+                        plan: [
+                            "📧 Implementa lead magnet + secuencia de bienvenida de 5 emails",
+                            "💬 Crea sistema de seguimiento por WhatsApp (no spam)",
+                            "📅 Programa contenido de valor semanal consistente",
+                            "🎯 Segmenta tu audiencia por nivel de interés",
+                            "🔄 Automatiza nurturing pero mantenlo personal"
+                        ]
+                    },
+                    4: {
+                        title: "✨ ESCALÓN 4: Lo Necesito (Casi Ahí)",
+                        description: "Tu audiencia te recuerda y valora tu contenido, pero falta el 'momento mágico' donde pasan de interés a necesidad urgente.",
+                        problem: "Falta urgencia y especificidad en la necesidad",
+                        potencial: 10000,
+                        plan: [
+                            "🔥 Crea contenido que identifique 'síntomas urgentes' del problema",
+                            "📞 Implementa llamadas de descubrimiento gratuitas",
+                            "📊 Presenta casos específicos y resultados cuantificables",
+                            "⏰ Usa triggers de urgencia genuinos (temporadas, cambios de mercado)",
+                            "🎯 Ofrece diagnósticos personalizados gratuitos"
+                        ]
+                    },
+                    5: {
+                        title: "🎯 ESCALÓN 5: Lo Compro (Optimización)",
+                        description: "¡Felicidades! Tienes un sistema que funciona. Ahora se trata de optimizar y escalar para resultados más consistentes.",
+                        problem: "Optimización de conversión y escalabilidad",
+                        potencial: 20000,
+                        plan: [
+                            "📊 Analiza métricas de conversión en cada paso del embudo",
+                            "🤖 Automatiza procesos repetitivos con IA",
+                            "💰 Implementa upsells y cross-sells estratégicos",
+                            "👥 Crea programa de referidos y afiliados",
+                            "📈 Escala con team y sistemas más robustos"
+                        ]
+                    }
+                };
+
+                return resultados[escalon];
+            };
+
+            const resetCalculadora = () => {
+                setCurrentQuestion(0);
+                setAnswers({});
+                setShowResult(false);
+                setEmail('');
+                setName('');
+            };
+
+            const handleSubmitEmail = () => {
+                if (name && email) {
+                    // Aquí puedes integrar con tu servicio de email
+                    alert(`¡Gracias ${name}! Te enviaremos el plan completo a ${email}`);
+                    
+                    // Opcional: enviar datos a Google Sheets, Zapier, etc.
+                    console.log('Datos capturados:', { name, email, escalon: showResult.escalon });
+                } else {
+                    alert('Por favor completa tu nombre y email');
+                }
+            };
+
+            if (showResult) {
+                const resultado = getResult();
+                
+                return (
+                    <div className="max-w-4xl mx-auto p-6 bg-gradient-to-br from-blue-50 to-purple-50 min-h-screen">
+                        <div className="bg-white rounded-2xl shadow-2xl p-8">
+                            {/* Header de Resultado */}
+                            <div className="text-center mb-8">
+                                <div className="w-16 h-16 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                                    <Target />
+                                </div>
+                                <h2 className="text-3xl font-bold text-gray-800 mb-2">
+                                    {resultado.title}
+                                </h2>
+                                <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+                                    {resultado.description}
+                                </p>
+                            </div>
+
+                            {/* Problema Identificado */}
+                            <div className="bg-red-50 border-l-4 border-red-400 p-6 mb-8">
+                                <div className="flex">
+                                    <div className="mr-3 flex-shrink-0 mt-1">
+                                        <AlertCircle />
+                                    </div>
+                                    <div>
+                                        <h3 className="text-lg font-semibold text-red-800 mb-2">Problema Identificado:</h3>
+                                        <p className="text-red-700">{resultado.problem}</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Potencial de Ingresos */}
+                            <div className="bg-green-50 border-l-4 border-green-400 p-6 mb-8">
+                                <div className="flex">
+                                    <div className="mr-3 flex-shrink-0 mt-1">
+                                        <DollarSign />
+                                    </div>
+                                    <div>
+                                        <h3 className="text-lg font-semibold text-green-800 mb-2">Potencial Mensual Estimado:</h3>
+                                        <p className="text-2xl font-bold text-green-700">${resultado.potencial.toLocaleString()} USD/mes</p>
+                                        <p className="text-sm text-green-600 mt-1">*Basado en emprendedores similares que superaron este escalón</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Plan de Acción */}
+                            <div className="mb-8">
+                                <h3 className="text-2xl font-bold text-gray-800 mb-6 flex items-center">
+                                    <div className="mr-3">
+                                        <Zap />
+                                    </div>
+                                    Tu Plan de Acción Personalizado
+                                </h3>
+                                <div className="space-y-4">
+                                    {resultado.plan.map((accion, index) => (
+                                        <div key={index} className="flex items-start p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                                            <div className="w-8 h-8 bg-blue-500 text-white rounded-full flex items-center justify-center text-sm font-bold mr-4 flex-shrink-0">
+                                                {index + 1}
+                                            </div>
+                                            <p className="text-gray-700 font-medium">{accion}</p>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Captura de Email */}
+                            <div className="bg-gradient-to-r from-blue-500 to-purple-600 rounded-2xl p-8 text-white text-center">
+                                <h3 className="text-2xl font-bold mb-4">¿Quieres el Plan Completo?</h3>
+                                <p className="mb-6 opacity-90">
+                                    Te enviaré una guía detallada con plantillas, herramientas de IA y casos de estudio específicos para tu escalón.
+                                </p>
+                                
+                                <div className="max-w-md mx-auto space-y-4">
+                                    <input
+                                        type="text"
+                                        placeholder="Tu nombre"
+                                        value={name}
+                                        onChange={(e) => setName(e.target.value)}
+                                        className="w-full px-4 py-3 rounded-lg text-gray-800 font-medium"
+                                    />
+                                    <input
+                                        type="email"
+                                        placeholder="Tu mejor email"
+                                        value={email}
+                                        onChange={(e) => setEmail(e.target.value)}
+                                        className="w-full px-4 py-3 rounded-lg text-gray-800 font-medium"
+                                    />
+                                    <button 
+                                        className="w-full bg-white text-blue-600 py-3 px-6 rounded-lg font-bold hover:bg-gray-100 transition-colors flex items-center justify-center"
+                                        onClick={handleSubmitEmail}
+                                    >
+                                        Enviar Mi Plan Personalizado
+                                        <div className="ml-2">
+                                            <ArrowRight />
+                                        </div>
+                                    </button>
+                                </div>
+                                
+                                <p className="text-sm opacity-75 mt-4">
+                                    📧 No spam. Solo contenido valioso para hacer crecer tu negocio.
+                                </p>
+                            </div>
+
+                            {/* Botón Reset */}
+                            <div className="text-center mt-8">
+                                <button 
+                                    onClick={resetCalculadora}
+                                    className="text-blue-600 hover:text-blue-800 font-medium underline"
+                                >
+                                    ← Hacer el diagnóstico nuevamente
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                );
+            }
+
+            return (
+                <div className="max-w-3xl mx-auto p-6 bg-gradient-to-br from-blue-50 to-purple-50 min-h-screen">
+                    <div className="bg-white rounded-2xl shadow-2xl p-8">
+                        {/* Header */}
+                        <div className="text-center mb-8">
+                            <div className="w-16 h-16 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <Target />
+                            </div>
+                            <h1 className="text-3xl font-bold text-gray-800 mb-2">
+                                ¿En Qué Escalón del Puente Estás Atorado?
+                            </h1>
+                            <p className="text-gray-600 max-w-2xl mx-auto">
+                                Descubre exactamente qué te impide convertir tu conocimiento en ingresos consistentes
+                            </p>
+                        </div>
+
+                        {/* Progress Bar */}
+                        <div className="mb-8">
+                            <div className="flex justify-between text-sm text-gray-500 mb-2">
+                                <span>Pregunta {currentQuestion + 1} de {questions.length}</span>
+                                <span>{Math.round(((currentQuestion + 1) / questions.length) * 100)}%</span>
+                            </div>
+                            <div className="w-full bg-gray-200 rounded-full h-2">
+                                <div 
+                                    className="bg-gradient-to-r from-blue-500 to-purple-600 h-2 rounded-full transition-all duration-300"
+                                    style={{ width: `${((currentQuestion + 1) / questions.length) * 100}%` }}
+                                ></div>
+                            </div>
+                        </div>
+
+                        {/* Pregunta */}
+                        <div className="mb-8">
+                            <h2 className="text-2xl font-semibold text-gray-800 mb-6 text-center">
+                                {questions[currentQuestion].title}
+                            </h2>
+                            
+                            <div className="space-y-4">
+                                {questions[currentQuestion].options.map((option, index) => (
+                                    <button
+                                        key={index}
+                                        onClick={() => handleAnswer(questions[currentQuestion].id, option)}
+                                        className="w-full p-6 text-left border-2 border-gray-200 rounded-xl hover:border-blue-300 hover:bg-blue-50 transition-all duration-200 group"
+                                    >
+                                        <div className="flex items-center">
+                                            <div className="w-6 h-6 border-2 border-gray-300 rounded-full mr-4 group-hover:border-blue-500 transition-colors">
+                                                <div className="w-full h-full bg-blue-500 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                                            </div>
+                                            <span className="text-gray-700 font-medium group-hover:text-blue-700">
+                                                {option.text}
+                                            </span>
+                                        </div>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Indicador de escalones */}
+                        <div className="text-center text-sm text-gray-500">
+                            <div className="flex justify-center items-center space-x-2 mb-4">
+                                <Users />
+                                <span>Diagnóstico basado en +500 emprendedores analizados</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        ReactDOM.render(<CalculadoraPuente />, document.getElementById('root'));
+    </script>
+</body>
+</html>
