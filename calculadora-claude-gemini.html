@@ -8,7 +8,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.22.5/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- CDN de jsPDF - ¡Asegúrate de que esta línea esté presente! -->
+    <!-- ¡IMPORTANTE! CDN de jsPDF añadido aquí para que la librería esté disponible -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <style>
         body { margin: 0; font-family: 'Inter', sans-serif; }
@@ -18,7 +18,7 @@
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useEffect } = React; // Importa useEffect
+        const { useState } = React;
 
         // Iconos como componentes SVG simples
         const Target = () => (
@@ -72,16 +72,12 @@
             const [showResult, setShowResult] = useState(false);
             const [email, setEmail] = useState('');
             const [name, setName] = useState('');
-            const [isGeneratingPdf, setIsGeneratingPdf] = useState(false); // New state for PDF generation loading
+            const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+            const [isSubmittingEmail, setIsSubmittingEmail] = useState(false); // Nuevo estado para el envío de email
 
-            // Verifica si jsPDF está disponible al montar el componente
-            useEffect(() => {
-                if (typeof window.jsPDF === 'undefined') {
-                    console.error("Error: jsPDF no está cargado. Asegúrate de que el CDN de jsPDF esté incluido y accesible.");
-                } else {
-                    console.log("jsPDF se ha cargado correctamente.");
-                }
-            }, []);
+            // URL del Webhook de Zapier
+            // ¡IMPORTANTE! Reemplaza esta URL con la URL de tu Webhook de Zapier
+            const ZAPIER_WEBHOOK_URL = 'TU_URL_DE_WEBHOOK_DE_ZAPIER_AQUI'; 
 
             const questions = [
                 {
@@ -290,123 +286,184 @@
                 setName('');
             };
 
-            const handleSubmitEmail = () => {
-                if (name && email) {
-                    // Aquí puedes integrar con tu servicio de email
-                    // En un entorno real, aquí harías una llamada a tu backend para enviar el email.
-                    // Por ahora, solo mostraremos un mensaje en la UI.
-                    document.getElementById('email-submission-message').innerText = `¡Gracias ${name}! Te enviaremos el plan completo a ${email} (simulado).`;
-                    document.getElementById('email-submission-message').classList.remove('hidden');
-                    document.getElementById('email-submission-message').classList.add('text-green-600');
-
-                    console.log('Datos capturados:', { name, email, escalon: showResult.escalon });
-                } else {
-                    document.getElementById('email-submission-message').innerText = 'Por favor completa tu nombre y email.';
-                    document.getElementById('email-submission-message').classList.remove('hidden');
-                    document.getElementById('email-submission-message').classList.add('text-red-600');
+            // Función para generar el PDF como cadena base64
+            const generatePdfAsBase64 = () => {
+                const resultado = getResult();
+                if (typeof window.jsPDF === 'undefined') {
+                    console.error("Error: jsPDF no está disponible para generar el PDF.");
+                    return null;
                 }
+
+                const doc = new window.jsPDF(); 
+                const margin = 20;
+                let y = margin;
+                const lineHeight = 10;
+                const maxWidth = 210 - 2 * margin; // A4 width - 2*margin
+
+                // Header
+                doc.setFont('helvetica', 'bold');
+                doc.setFontSize(24);
+                doc.setTextColor(76, 29, 149); // Purple
+                doc.text('Diagnóstico de Emprendedor', 105, y, { align: 'center' });
+                y += 15;
+
+                // Subheader
+                doc.setFont('helvetica', 'normal');
+                doc.setFontSize(12);
+                doc.setTextColor(55, 65, 81); // Gray
+                doc.text('El Puente de 5 Escalones para Convertir Conocimiento en Ingresos', 105, y, { align: 'center' });
+                y += 20;
+
+                // Sección de Resultado
+                doc.setFillColor(236, 252, 236); // Light Green background
+                doc.rect(margin - 5, y - 5, maxWidth + 10, lineHeight * 5 + 10, 'F'); // Background rectangle
+                doc.setDrawColor(134, 239, 172); // Green border
+                doc.setLineWidth(0.5);
+                doc.rect(margin - 5, y - 5, maxWidth + 10, lineHeight * 5 + 10, 'S'); // Border
+
+                doc.setFont('helvetica', 'bold');
+                doc.setFontSize(18);
+                doc.setTextColor(22, 101, 52); // Dark Green
+                doc.text(`Escalón Identificado: ${resultado.title}`, margin, y);
+                y += lineHeight * 1.5;
+
+                doc.setFont('helvetica', 'normal');
+                doc.setFontSize(12);
+                doc.setTextColor(55, 65, 81); // Gray
+                const descriptionLines = doc.splitTextToSize(resultado.description, maxWidth);
+                doc.text(descriptionLines, margin, y);
+                y += lineHeight * descriptionLines.length + lineHeight;
+
+                // Problema Identificado
+                doc.setFont('helvetica', 'bold');
+                doc.setTextColor(153, 27, 27); // Red
+                const problemLines = doc.splitTextToSize(`Problema Identificado: ${resultado.problem}`, maxWidth);
+                doc.text(problemLines, margin, y);
+                y += lineHeight * problemLines.length + lineHeight;
+
+                // Potencial de Ingresos
+                doc.setFont('helvetica', 'bold');
+                doc.setTextColor(22, 101, 52); // Dark Green
+                doc.text(`Potencial Mensual Estimado: $${resultado.potencial.toLocaleString()} USD/mes`, margin, y);
+                y += lineHeight * 1.5;
+
+                // Plan de Acción
+                doc.setFont('helvetica', 'bold');
+                doc.setFontSize(16);
+                doc.setTextColor(76, 29, 149); // Purple
+                doc.text('Tu Plan de Acción Personalizado:', margin, y);
+                y += lineHeight * 1.5;
+
+                doc.setFont('helvetica', 'normal');
+                doc.setFontSize(12);
+                doc.setTextColor(55, 65, 81); // Gray
+                resultado.plan.forEach((accion, index) => {
+                    const actionLines = doc.splitTextToSize(`${index + 1}. ${accion}`, maxWidth);
+                    doc.text(actionLines, margin, y);
+                    y += lineHeight * actionLines.length + lineHeight * 0.5;
+                });
+
+                // Footer
+                doc.setFont('helvetica', 'italic');
+                doc.setFontSize(10);
+                doc.setTextColor(156, 163, 175); // Light Gray
+                doc.text('¡Esperamos que esta guía te sea de gran utilidad para cruzar tu propio río!', 105, doc.internal.pageSize.height - margin, { align: 'center' });
+
+                return doc.output('datauristring'); // Retorna el PDF como Data URI
             };
 
             const handleDownloadPdf = () => {
                 if (!showResult) return;
-
                 setIsGeneratingPdf(true);
-                const resultado = getResult();
-
                 try {
-                    // Accede a jsPDF a través de window.jsPDF ya que se carga globalmente por el CDN
-                    if (typeof window.jsPDF === 'undefined') {
-                        console.error("Error al generar PDF: jsPDF no está disponible en el objeto window.");
-                        alert("No se pudo generar el PDF. Por favor, intenta de nuevo o contacta al soporte."); // Usar un mensaje en UI en lugar de alert()
-                        setIsGeneratingPdf(false);
-                        return;
+                    const pdfDataUri = generatePdfAsBase64();
+                    if (pdfDataUri) {
+                        // Crear un enlace temporal para descargar el PDF
+                        const link = document.createElement('a');
+                        link.href = pdfDataUri;
+                        link.download = 'Diagnostico_Emprendedor_Resultado.pdf';
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                    } else {
+                        alert("No se pudo generar el PDF para descargar. Revisa la consola.");
                     }
-                    
-                    const doc = new window.jsPDF(); 
-
-                    const margin = 20;
-                    let y = margin;
-                    const lineHeight = 10;
-                    const maxWidth = 210 - 2 * margin; // A4 width - 2*margin
-
-                    // Header
-                    doc.setFont('helvetica', 'bold');
-                    doc.setFontSize(24);
-                    doc.setTextColor(76, 29, 149); // Purple
-                    doc.text('Diagnóstico de Emprendedor', 105, y, { align: 'center' });
-                    y += 15;
-
-                    // Subheader
-                    doc.setFont('helvetica', 'normal');
-                    doc.setFontSize(12);
-                    doc.setTextColor(55, 65, 81); // Gray
-                    doc.text('El Puente de 5 Escalones para Convertir Conocimiento en Ingresos', 105, y, { align: 'center' });
-                    y += 20;
-
-                    // Sección de Resultado
-                    doc.setFillColor(236, 252, 236); // Light Green background
-                    doc.rect(margin - 5, y - 5, maxWidth + 10, lineHeight * 5 + 10, 'F'); // Background rectangle
-                    doc.setDrawColor(134, 239, 172); // Green border
-                    doc.setLineWidth(0.5);
-                    doc.rect(margin - 5, y - 5, maxWidth + 10, lineHeight * 5 + 10, 'S'); // Border
-
-                    doc.setFont('helvetica', 'bold');
-                    doc.setFontSize(18);
-                    doc.setTextColor(22, 101, 52); // Dark Green
-                    doc.text(`Escalón Identificado: ${resultado.title}`, margin, y);
-                    y += lineHeight * 1.5;
-
-                    doc.setFont('helvetica', 'normal');
-                    doc.setFontSize(12);
-                    doc.setTextColor(55, 65, 81); // Gray
-                    const descriptionLines = doc.splitTextToSize(resultado.description, maxWidth);
-                    doc.text(descriptionLines, margin, y);
-                    y += lineHeight * descriptionLines.length + lineHeight;
-
-                    // Problema Identificado
-                    doc.setFont('helvetica', 'bold');
-                    doc.setTextColor(153, 27, 27); // Red
-                    const problemLines = doc.splitTextToSize(`Problema Identificado: ${resultado.problem}`, maxWidth);
-                    doc.text(problemLines, margin, y);
-                    y += lineHeight * problemLines.length + lineHeight;
-
-                    // Potencial de Ingresos
-                    doc.setFont('helvetica', 'bold');
-                    doc.setTextColor(22, 101, 52); // Dark Green
-                    doc.text(`Potencial Mensual Estimado: $${resultado.potencial.toLocaleString()} USD/mes`, margin, y);
-                    y += lineHeight * 1.5;
-
-                    // Plan de Acción
-                    doc.setFont('helvetica', 'bold');
-                    doc.setFontSize(16);
-                    doc.setTextColor(76, 29, 149); // Purple
-                    doc.text('Tu Plan de Acción Personalizado:', margin, y);
-                    y += lineHeight * 1.5;
-
-                    doc.setFont('helvetica', 'normal');
-                    doc.setFontSize(12);
-                    doc.setTextColor(55, 65, 81); // Gray
-                    resultado.plan.forEach((accion, index) => {
-                        const actionLines = doc.splitTextToSize(`${index + 1}. ${accion}`, maxWidth);
-                        doc.text(actionLines, margin, y);
-                        y += lineHeight * actionLines.length + lineHeight * 0.5;
-                    });
-
-                    // Footer
-                    doc.setFont('helvetica', 'italic');
-                    doc.setFontSize(10);
-                    doc.setTextColor(156, 163, 175); // Light Gray
-                    doc.text('¡Esperamos que esta guía te sea de gran utilidad para cruzar tu propio río!', 105, doc.internal.pageSize.height - margin, { align: 'center' });
-
-                    doc.save('Diagnostico_Emprendedor_Resultado.pdf');
                 } catch (error) {
-                    console.error("Error al generar el PDF:", error);
-                    alert("Ocurrió un error al generar el PDF. Por favor, revisa la consola para más detalles."); // Usar un mensaje en UI
+                    console.error("Error al descargar el PDF:", error);
+                    alert("Ocurrió un error al descargar el PDF. Por favor, revisa la consola para más detalles.");
                 } finally {
-                    setIsGeneratingPdf(false); // Asegura que el estado de carga se desactive
+                    setIsGeneratingPdf(false);
                 }
             };
 
+            const handleSubmitEmail = async (e) => {
+                e.preventDefault();
+                if (!name || !email) {
+                    document.getElementById('email-submission-message').innerText = 'Por favor completa tu nombre y email.';
+                    document.getElementById('email-submission-message').classList.remove('hidden');
+                    document.getElementById('email-submission-message').classList.add('text-red-600');
+                    return;
+                }
+
+                setIsSubmittingEmail(true);
+                document.getElementById('email-submission-message').innerText = 'Enviando...';
+                document.getElementById('email-submission-message').classList.remove('hidden', 'text-red-600', 'text-green-600');
+                document.getElementById('email-submission-message').classList.add('text-gray-600');
+
+                try {
+                    const pdfDataUri = generatePdfAsBase64();
+                    if (!pdfDataUri) {
+                        alert("No se pudo generar el PDF para enviar. Revisa la consola.");
+                        setIsSubmittingEmail(false);
+                        return;
+                    }
+
+                    // Extraer solo la parte base64 del Data URI
+                    const pdfBase64 = pdfDataUri.split(',')[1];
+                    const resultadoActual = getResult();
+
+                    const payload = {
+                        name: name,
+                        email: email,
+                        escalon_title: resultadoActual.title,
+                        escalon_description: resultadoActual.description,
+                        escalon_problem: resultadoActual.problem,
+                        escalon_potencial: resultadoActual.potencial,
+                        escalon_plan: resultadoActual.plan,
+                        pdf_base64: pdfBase64,
+                        pdf_filename: 'Diagnostico_Emprendedor_Resultado.pdf'
+                    };
+
+                    const response = await fetch(ZAPIER_WEBHOOK_URL, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(payload),
+                    });
+
+                    if (response.ok) {
+                        document.getElementById('email-submission-message').innerText = `¡Gracias ${name}! Te enviaremos el plan completo a ${email}. Revisa tu bandeja de entrada.`;
+                        document.getElementById('email-submission-message').classList.remove('text-red-600', 'text-gray-600');
+                        document.getElementById('email-submission-message').classList.add('text-green-600');
+                        // Opcional: limpiar campos después de un envío exitoso
+                        // setName('');
+                        // setEmail('');
+                    } else {
+                        console.error("Error al enviar a Zapier:", response.status, response.statusText);
+                        document.getElementById('email-submission-message').innerText = 'Hubo un error al enviar tu información. Por favor, intenta de nuevo.';
+                        document.getElementById('email-submission-message').classList.remove('text-green-600', 'text-gray-600');
+                        document.getElementById('email-submission-message').classList.add('text-red-600');
+                    }
+                } catch (error) {
+                    console.error("Error en la conexión con Zapier:", error);
+                    document.getElementById('email-submission-message').innerText = 'Ocurrió un error de red. Por favor, verifica tu conexión.';
+                    document.getElementById('email-submission-message').classList.remove('text-green-600', 'text-gray-600');
+                    document.getElementById('email-submission-message').classList.add('text-red-600');
+                } finally {
+                    setIsSubmittingEmail(false);
+                }
+            };
 
             if (showResult) {
                 const resultado = getResult();
@@ -488,6 +545,7 @@
                                         value={name}
                                         onChange={(e) => setName(e.target.value)}
                                         className="w-full px-4 py-3 rounded-lg text-gray-800 font-medium"
+                                        disabled={isSubmittingEmail}
                                     />
                                     <input
                                         type="email"
@@ -495,15 +553,19 @@
                                         value={email}
                                         onChange={(e) => setEmail(e.target.value)}
                                         className="w-full px-4 py-3 rounded-lg text-gray-800 font-medium"
+                                        disabled={isSubmittingEmail}
                                     />
                                     <button 
                                         className="w-full bg-white text-blue-600 py-3 px-6 rounded-lg font-bold hover:bg-gray-100 transition-colors flex items-center justify-center"
                                         onClick={handleSubmitEmail}
+                                        disabled={isSubmittingEmail}
                                     >
-                                        Enviar Mi Plan Personalizado
-                                        <div className="ml-2">
-                                            <ArrowRight />
-                                        </div>
+                                        {isSubmittingEmail ? 'Enviando...' : 'Enviar Mi Plan Personalizado'}
+                                        {!isSubmittingEmail && (
+                                            <div className="ml-2">
+                                                <ArrowRight />
+                                            </div>
+                                        )}
                                     </button>
                                     <p id="email-submission-message" className="mt-4 text-sm font-semibold hidden"></p>
                                 </div>
